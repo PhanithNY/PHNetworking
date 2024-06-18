@@ -116,7 +116,7 @@ public class MultipleFileUploadServiceProvider<T: Decodable>: NSObject, URLSessi
     return request
   }
   
-  private func buildBodyData(using params: [[String: Any]], medias: [MultipartForm.Part]) -> Data {
+  private func buildBodyData(using params: [[String: Any]], medias: [Media]) -> Data {
     let lineBreak = "\r\n"
     var body = Data()
     
@@ -128,12 +128,12 @@ public class MultipleFileUploadServiceProvider<T: Decodable>: NSObject, URLSessi
       }
     }
     
-    let dictionary = Dictionary(grouping: medias, by: { $0.name })
+    let dictionary = Dictionary(grouping: medias, by: { $0.key })
     dictionary.forEach {
       for (index, media) in $0.value.enumerated() {
         body.append("--\(boundary + lineBreak)")
-        body.append("Content-Disposition: form-data; name=\"\(media.name)[\(index)]\"; filename=\"\(media.filename.optionallyEmpty)\"\(lineBreak)")
-        body.append("Content-Type: \(media.contentType.optionallyEmpty + lineBreak + lineBreak)")
+        body.append("Content-Disposition: form-data; name=\"\(media.key)[\(index)]\"; filename=\"\(media.filename)\"\(lineBreak)")
+        body.append("Content-Type: \(media.mimeType + lineBreak + lineBreak)")
         body.append(media.data)
         body.append(lineBreak)
       }

@@ -32,29 +32,34 @@ public struct SingleFileUploadServiceProvider<T: Decodable> {
     }
     
     let request = buildRequest(from: url)
+    if NetworkLogger.shared.logStatus == .enable {
+      NetworkLogger.log(request: request)
+    }
     
     let session = URLSession.shared
     session.dataTask(with: request) { (data, response, error) in
-      if let response = response,
+      if NetworkLogger.shared.logStatus == .enable,
+         let response = response,
          let data = data {
-        if NetworkLogger.shared.logStatus == .enable {
-          NetworkLogger.log(response: response, data: data)
-        }
+        NetworkLogger.log(response: response, data: data)
       }
       
-      if let error = error {
-        result?(nil, error)
-        return
-      }
-      
-      if let data = data {
-        do {
-          let object = try JSONDecoder().decode(T.self, from: data)
-          result?(object, nil)
-        } catch {
+      _MainThread.run {
+        if let error = error {
           result?(nil, error)
+          return
+        }
+        
+        if let data = data {
+          do {
+            let object = try JSONDecoder().decode(T.self, from: data)
+            result?(object, nil)
+          } catch {
+            result?(nil, error)
+          }
         }
       }
+      
     }.resume()
     
   }
@@ -63,7 +68,6 @@ public struct SingleFileUploadServiceProvider<T: Decodable> {
   
   private func buildRequest(from url: URL) -> URLRequest {
     var request = URLRequest(url: url)
-    request.timeoutInterval = 120
     request.httpMethod = "POST"
     
     request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -75,22 +79,31 @@ public struct SingleFileUploadServiceProvider<T: Decodable> {
     
     if let media = target.medias.first {
       let param = target.params.first ?? [:]
-      let form = buildBodyData(using: param, media: media)
-      request.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
-      request.httpBody = form.bodyData
+      let dataBody = buildBodyData(using: param, media: media)
+      request.httpBody = dataBody
     }
     
     return request
   }
   
-  private func buildBodyData(using param: [String: Any], media: MultipartForm.Part) -> MultipartForm {
-    let paramParts: [MultipartForm.Part] = param.map {
-      MultipartForm.Part(name: $0.key, value: "\($0.value)")
-    }
-    var parts: [MultipartForm.Part] = paramParts
-    parts.append(media)
+  private func buildBodyData(using param: [String: Any], media: Media) -> Data {
+    let lineBreak = "\r\n"
+    var body = Data()
     
-    let form = MultipartForm(parts: parts)
-    return form
+    for (key, value) in param {
+      body.append("--\(boundary + lineBreak)")
+      body.append("Content-Disposition: form-data; name=\"\(key)\"\(lineBreak + lineBreak)")
+      body.append("\(value)" + "\(lineBreak)")
+    }
+    
+    body.append("--\(boundary + lineBreak)")
+    body.append("Content-Disposition: form-data; name=\"\(media.key)\"; filename=\"\(media.filename)\"\(lineBreak)")
+    body.append("Content-Type: \(media.mimeType + lineBreak + lineBreak)")
+    body.append(media.data)
+    body.append(lineBreak)
+    
+    body.append("--\(boundary)--\(lineBreak)")
+    
+    return body
   }
 }

@@ -12,6 +12,6 @@ public protocol MultipartType {
   var path: String { get }
   var headers: HTTPHeaders? { get }
   var params: [[String: Any]] { get }
-  var medias: [MultipartForm.Part] { get }
+  var medias: [Media] { get }
   var boundary: String { get }
 }
